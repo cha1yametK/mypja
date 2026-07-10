@@ -1,0 +1,1774 @@
+<!DOCTYPE html>
+<html lang="th" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DDShareMe - Realtime File & Link Sharing</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Prompt', 'sans-serif'],
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'ping-slow': 'ping 2s cubic-bezier(0, 0, 0.2, 1) infinite',
+                        'fade-in': 'fadeIn 0.3s ease-out',
+                        'slide-up': 'slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+                        'pop-in': 'popIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Prompt', sans-serif;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.5); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(156, 163, 175, 0.8); }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes popIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        .animate-slide-up { animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
+        .animate-pop-in { animation: popIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+        .view-panel { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+
+        /* Drag & drop highlight */
+        .dropzone-active {
+            border-color: rgb(99 102 241) !important;
+            background-color: rgba(99, 102, 241, 0.06);
+        }
+
+        /* Message bubble tail-less card style */
+        .msg-row { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+
+        /* Progress bar shimmer */
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        .bg-shimmer {
+            background-image: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0) 100%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+
+        /* Toggle track color reused for approval + password from base skeleton, extended for room toggles */
+        .copy-flash { animation: popIn 0.2s ease-out; }
+
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-full flex flex-col transition-colors duration-300">
+
+    <!-- Custom Toast Notification System -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-3 pointer-events-none max-w-sm w-full px-4 sm:px-0"></div>
+
+    <!-- Confirm Modal (generic) -->
+    <div id="confirm-modal" class="hidden fixed inset-0 z-50 items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-950 rounded-3xl shadow-2xl p-6 max-w-sm w-full space-y-4 animate-pop-in border border-slate-100 dark:border-slate-800">
+            <div class="flex items-start gap-3">
+                <div id="confirm-modal-icon" class="w-10 h-10 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <div>
+                    <h3 id="confirm-modal-title" class="font-bold text-lg">ยืนยันการทำรายการ</h3>
+                    <p id="confirm-modal-body" class="text-sm text-slate-500 dark:text-slate-400 mt-1"></p>
+                </div>
+            </div>
+            <div class="flex gap-3 pt-2">
+                <button id="confirm-modal-cancel" class="flex-1 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-semibold text-sm transition-colors">ยกเลิก</button>
+                <button id="confirm-modal-ok" class="flex-1 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-sm transition-colors">ยืนยัน</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Lightbox -->
+    <div id="lightbox" class="hidden fixed inset-0 z-50 items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm cursor-zoom-out" onclick="closeLightbox()">
+        <img id="lightbox-img" src="" class="max-w-full max-h-full rounded-2xl shadow-2xl animate-pop-in" alt="preview">
+        <button class="absolute top-5 right-5 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors" onclick="closeLightbox()">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+    </div>
+
+    <!-- Main Header -->
+    <header class="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md sticky top-0 z-40 transition-all duration-300">
+        <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3 cursor-pointer" onclick="goHome()">
+                <div class="bg-gradient-to-tr from-indigo-500 to-purple-600 text-white p-2.5 rounded-2xl shadow-lg shadow-indigo-500/20 transform hover:scale-105 transition-transform">
+                    <i class="fa-solid fa-share-nodes text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-xl tracking-tight bg-gradient-to-r from-indigo-500 to-purple-600 bg-clip-text text-transparent">DDShareMe</h1>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">Realtime Peer Sharing</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 sm:gap-3">
+                <!-- Theme Toggle Button -->
+                <button id="theme-toggle" class="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors duration-200 text-slate-600 dark:text-slate-300" aria-label="Toggle Theme">
+                    <i class="fa-solid fa-sun hidden dark:block"></i>
+                    <i class="fa-solid fa-moon block dark:hidden"></i>
+                </button>
+
+                <!-- Connection Status Indicator -->
+                <div id="connection-indicator" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-medium">
+                    <span id="connection-dot" class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                    <span id="connection-text">กำลังตรวจสอบ...</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl mx-auto w-full px-4 py-6 flex flex-col justify-center">
+
+        <!-- ==================== PAGE: HOME VIEW ==================== -->
+        <div id="view-home" class="view-panel max-w-md mx-auto w-full space-y-6 transform transition-all duration-500 py-8">
+            <div class="text-center space-y-2">
+                <h2 class="text-3xl font-extrabold text-slate-900 dark:text-white">แชร์ไฟล์ง่ายและรวดเร็ว</h2>
+                <p class="text-slate-500 dark:text-slate-400">สร้างห้องส่งไฟล์ ข้อความ หรือลิงก์ ร่วมกันแบบเรียลไทม์ได้ทันที</p>
+            </div>
+
+            <!-- Nickname Card -->
+            <div class="bg-white dark:bg-slate-950 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-xl space-y-4">
+                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300">ระบุชื่อเล่นของคุณก่อนเข้าใช้งาน</label>
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                        <i class="fa-solid fa-user"></i>
+                    </span>
+                    <input type="text" id="input-nickname" maxlength="20" placeholder="เช่น ชัยเมธ..." class="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-900 dark:text-white transition-all">
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="grid grid-cols-2 gap-4">
+                <button onclick="showCreateRoomConfig()" class="group flex flex-col items-center justify-center p-6 bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white rounded-3xl shadow-xl shadow-indigo-500/10 hover:shadow-indigo-500/25 transition-all duration-300 hover:-translate-y-1">
+                    <div class="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-plus text-xl"></i>
+                    </div>
+                    <span class="font-bold text-base">สร้างห้องใหม่</span>
+                    <span class="text-xs text-indigo-200 mt-1">เป็นผู้ดูแลความปลอดภัย</span>
+                </button>
+
+                <button onclick="showJoinRoomConfig()" class="group flex flex-col items-center justify-center p-6 bg-white dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white rounded-3xl shadow-xl shadow-slate-100/10 transition-all duration-300 hover:-translate-y-1">
+                    <div class="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform text-indigo-500 dark:text-indigo-400">
+                        <i class="fa-solid fa-right-to-bracket text-xl"></i>
+                    </div>
+                    <span class="font-bold text-base">เข้าร่วมห้อง</span>
+                    <span class="text-xs text-slate-400 mt-1">ใช้เลขห้องหรือลิงก์เข้า</span>
+                </button>
+            </div>
+
+            <!-- Recent Rooms (local history) -->
+            <div id="recent-rooms-wrap" class="hidden space-y-3">
+                <div class="flex items-center justify-between px-1">
+                    <label class="text-sm font-semibold text-slate-500 dark:text-slate-400">ห้องที่เคยเข้าล่าสุด</label>
+                    <button onclick="clearRecentRooms()" class="text-xs text-slate-400 hover:text-rose-500 transition-colors">ล้างประวัติ</button>
+                </div>
+                <div id="recent-rooms-list" class="space-y-2"></div>
+            </div>
+        </div>
+
+        <!-- ==================== PAGE: CREATE ROOM CONFIG ==================== -->
+        <div id="view-create" class="view-panel hidden max-w-md mx-auto w-full bg-white dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-3xl shadow-2xl p-6 space-y-6 transform transition-all duration-500">
+            <div class="flex items-center gap-3">
+                <button onclick="goHome()" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h2 class="text-2xl font-bold">ตั้งค่าสร้างห้อง</h2>
+            </div>
+
+            <!-- Room Form -->
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">ชื่อห้อง</label>
+                    <input type="text" id="create-room-name" maxlength="40" placeholder="ห้องแชร์งานด่วน..." class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-900 dark:text-white">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">จำนวนสมาชิกสูงสุด (2 - 50 คน)</label>
+                    <div class="flex items-center gap-4">
+                        <input type="range" id="create-max-users" min="2" max="50" value="10" class="w-full accent-indigo-600" oninput="document.getElementById('max-users-val').innerText = this.value">
+                        <span class="font-bold text-indigo-600 dark:text-indigo-400 w-12 text-center" id="max-users-val">10</span>
+                    </div>
+                </div>
+
+                <!-- Join Mode / Access Rights -->
+                <div class="space-y-3 pt-2">
+                    <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300">สิทธิ์การเข้าร่วมห้อง</label>
+
+                    <div class="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/60 transition-all">
+                        <div class="flex items-center gap-3">
+                            <div class="text-amber-500"><i class="fa-solid fa-user-shield text-lg"></i></div>
+                            <div>
+                                <p class="text-sm font-semibold">แอดมินต้องกดยืนยันก่อน</p>
+                                <p class="text-xs text-slate-400">ถ้าปิดไว้ ทุกคนที่มีรหัสห้องจะเข้าได้เลย</p>
+                            </div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="toggle-approval" class="sr-only peer">
+                            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                        </label>
+                    </div>
+
+                    <div class="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/60 transition-all">
+                        <div class="flex items-center gap-3">
+                            <div class="text-rose-500"><i class="fa-solid fa-key text-lg"></i></div>
+                            <div>
+                                <p class="text-sm font-semibold">บังคับใช้รหัสผ่าน</p>
+                                <p class="text-xs text-slate-400">ต้องใส่รหัสห้องให้ถูกต้องก่อนเข้า</p>
+                            </div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="toggle-password" onchange="togglePasswordInput(this.checked)" class="sr-only peer">
+                            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-500"></div>
+                        </label>
+                    </div>
+                </div>
+
+                <div id="create-password-container" class="hidden space-y-2 animate-fade-in">
+                    <label class="block text-xs font-semibold text-rose-500">ตั้งค่ารหัสผ่านเข้าห้อง</label>
+                    <input type="password" id="create-room-password" maxlength="30" placeholder="พิมพ์รหัสผ่านตรงนี้..." class="w-full px-4 py-2.5 bg-rose-50/20 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900 rounded-2xl focus:ring-2 focus:ring-rose-500 focus:outline-none text-slate-900 dark:text-white">
+                </div>
+            </div>
+
+            <button id="btn-create-room" onclick="handleCreateRoom()" class="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold rounded-2xl shadow-xl shadow-indigo-500/20 hover:shadow-indigo-500/40 transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                <i class="fa-solid fa-circle-check"></i>
+                <span>สร้างห้องแชร์ไฟล์เลย</span>
+            </button>
+        </div>
+
+        <!-- ==================== PAGE: JOIN ROOM CONFIG ==================== -->
+        <div id="view-join" class="view-panel hidden max-w-md mx-auto w-full bg-white dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-3xl shadow-2xl p-6 space-y-6 transform transition-all duration-500">
+            <div class="flex items-center gap-3">
+                <button onclick="goHome()" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <h2 class="text-2xl font-bold">เข้าร่วมห้อง</h2>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">ระบุเลขรหัสห้อง (6 หลัก)</label>
+                    <input type="text" id="join-room-code" maxlength="6" inputmode="numeric" placeholder="เช่น 249581..." class="w-full px-4 py-4 text-center text-2xl font-mono tracking-widest bg-slate-50 dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl focus:border-indigo-500 focus:outline-none text-indigo-600 dark:text-indigo-400 font-bold transition-all">
+                </div>
+
+                <div id="join-password-container" class="hidden space-y-2 animate-fade-in">
+                    <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300">ใส่รหัสผ่านเพื่อเข้าร่วม</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                            <i class="fa-solid fa-lock"></i>
+                        </span>
+                        <input type="password" id="join-room-password" placeholder="ป้อนรหัสผ่านห้อง..." class="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-900 dark:text-white">
+                    </div>
+                </div>
+            </div>
+
+            <button id="btn-join-room" onclick="handleJoinRoom()" class="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-xl shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                <i class="fa-solid fa-right-to-bracket"></i>
+                <span>ตรวจสอบห้องและเข้าร่วม</span>
+            </button>
+        </div>
+
+        <!-- ==================== PAGE: WAITING FOR APPROVAL ==================== -->
+        <div id="view-waiting" class="view-panel hidden max-w-md mx-auto w-full bg-white dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-3xl shadow-2xl p-8 space-y-6 text-center transform transition-all duration-500">
+            <div class="w-20 h-20 mx-auto rounded-full bg-amber-500/10 flex items-center justify-center">
+                <i class="fa-solid fa-hourglass-half text-3xl text-amber-500 animate-pulse-slow"></i>
+            </div>
+            <div class="space-y-1.5">
+                <h3 class="text-xl font-bold">รอแอดมินอนุมัติ...</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">ห้อง <span id="waiting-room-name" class="font-semibold text-slate-700 dark:text-slate-300"></span> ต้องได้รับการยืนยันจากแอดมินก่อนเข้าร่วม กรุณารอสักครู่</p>
+            </div>
+            <button onclick="cancelWaitingRequest()" class="w-full py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-semibold rounded-2xl transition-all">
+                ยกเลิกคำขอ
+            </button>
+        </div>
+
+        <!-- ==================== PAGE: ROOM (main workspace) ==================== -->
+        <div id="view-room" class="view-panel hidden w-full">
+            <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5 items-start">
+
+                <!-- LEFT: Room header + feed + composer -->
+                <div class="space-y-4 min-w-0">
+
+                    <!-- Room Header Card -->
+                    <div class="bg-white dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-3xl shadow-xl p-5">
+                        <div class="flex items-start justify-between gap-3 flex-wrap">
+                            <div class="flex items-start gap-3 min-w-0">
+                                <button onclick="leaveRoomPrompt()" class="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors flex-shrink-0" title="ออกจากห้อง">
+                                    <i class="fa-solid fa-arrow-left"></i>
+                                </button>
+                                <div class="min-w-0">
+                                    <h2 id="room-title" class="text-xl font-bold truncate">ห้องแชร์งานด่วน</h2>
+                                    <div class="flex items-center gap-2 mt-1 flex-wrap">
+                                        <span id="room-code-badge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-mono font-bold tracking-widest cursor-pointer hover:bg-indigo-500/20 transition-colors" onclick="copyRoomCode()" title="คลิกเพื่อคัดลอกรหัสห้อง">
+                                            <i class="fa-solid fa-hashtag text-[10px]"></i><span id="room-code-text">000000</span>
+                                            <i class="fa-regular fa-copy text-[10px] ml-0.5"></i>
+                                        </span>
+                                        <span id="room-lock-badge" class="hidden inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-500/10 text-rose-500 text-[11px] font-semibold">
+                                            <i class="fa-solid fa-lock text-[10px]"></i>มีรหัสผ่าน
+                                        </span>
+                                        <span id="room-approval-badge" class="hidden inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/10 text-amber-500 text-[11px] font-semibold">
+                                            <i class="fa-solid fa-user-shield text-[10px]"></i>ต้องอนุมัติ
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 flex-shrink-0">
+                                <button onclick="shareRoomLink()" class="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors" title="แชร์ลิงก์ห้อง">
+                                    <i class="fa-solid fa-link"></i>
+                                </button>
+                                <button id="btn-toggle-members" onclick="toggleMembersPanel()" class="lg:hidden relative p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors" title="สมาชิก">
+                                    <i class="fa-solid fa-users"></i>
+                                    <span id="member-count-dot" class="absolute -top-1 -right-1 bg-indigo-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">0</span>
+                                </button>
+                                <button onclick="leaveRoomPrompt()" class="hidden sm:flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 text-sm font-semibold transition-colors">
+                                    <i class="fa-solid fa-door-open"></i>ออกจากห้อง
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pending Approvals (host only) -->
+                    <div id="pending-approvals-card" class="hidden bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-3xl shadow-xl p-5 space-y-3 animate-slide-up">
+                        <div class="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                            <i class="fa-solid fa-user-clock"></i>
+                            <h3 class="font-bold text-sm">คำขอเข้าร่วมรอดำเนินการ (<span id="pending-count">0</span>)</h3>
+                        </div>
+                        <div id="pending-approvals-list" class="space-y-2"></div>
+                    </div>
+
+                    <!-- Share Composer -->
+                    <div id="dropzone" class="bg-white dark:bg-slate-950 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl shadow-xl p-4 sm:p-5 space-y-3 transition-colors duration-200">
+                        <!-- Tab switcher -->
+                        <div class="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 p-1 rounded-2xl w-fit">
+                            <button id="tab-btn-text" onclick="switchComposerTab('text')" class="composer-tab px-4 py-1.5 rounded-xl text-sm font-semibold transition-all bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm">
+                                <i class="fa-solid fa-message mr-1.5"></i>ข้อความ/ลิงก์
+                            </button>
+                            <button id="tab-btn-file" onclick="switchComposerTab('file')" class="composer-tab px-4 py-1.5 rounded-xl text-sm font-semibold transition-all text-slate-500 dark:text-slate-400">
+                                <i class="fa-solid fa-paperclip mr-1.5"></i>ไฟล์
+                            </button>
+                        </div>
+
+                        <!-- Text/Link composer -->
+                        <div id="composer-text" class="space-y-2">
+                            <textarea id="input-message" rows="2" maxlength="2000" placeholder="พิมพ์ข้อความหรือวางลิงก์ตรงนี้... (Enter เพื่อส่ง, Shift+Enter ขึ้นบรรทัดใหม่)" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-900 dark:text-white resize-none transition-all"></textarea>
+                            <div class="flex items-center justify-between">
+                                <span id="char-count" class="text-[11px] text-slate-400">0 / 2000</span>
+                                <button onclick="sendTextMessage()" class="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl shadow-lg shadow-indigo-600/20 transition-all">
+                                    ส่งข้อความ<i class="fa-solid fa-paper-plane"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- File composer -->
+                        <div id="composer-file" class="hidden space-y-3">
+                            <label for="file-input" class="flex flex-col items-center justify-center gap-2 py-8 rounded-2xl bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-900 cursor-pointer transition-colors">
+                                <i class="fa-solid fa-cloud-arrow-up text-3xl text-indigo-400"></i>
+                                <p class="text-sm font-semibold text-slate-600 dark:text-slate-300">ลากไฟล์มาวาง หรือคลิกเพื่อเลือกไฟล์</p>
+                                <p class="text-xs text-slate-400">รองรับไฟล์ขนาดไม่เกิน 700KB ต่อไฟล์ (จำกัดโดยฐานข้อมูลเรียลไทม์)</p>
+                                <input type="file" id="file-input" class="hidden" multiple>
+                            </label>
+                            <div id="file-queue" class="space-y-2"></div>
+                        </div>
+                    </div>
+
+                    <!-- Feed -->
+                    <div class="bg-white dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-3xl shadow-xl overflow-hidden">
+                        <div class="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-slate-800">
+                            <h3 class="font-bold text-sm text-slate-600 dark:text-slate-300"><i class="fa-solid fa-stream mr-1.5 text-indigo-400"></i>รายการที่แชร์</h3>
+                            <button onclick="scrollFeedToBottom(true)" class="text-xs text-slate-400 hover:text-indigo-500 transition-colors">
+                                <i class="fa-solid fa-arrow-down mr-1"></i>ล่าสุด
+                            </button>
+                        </div>
+                        <div id="feed-list" class="p-4 sm:p-5 space-y-3 max-h-[55vh] min-h-[220px] overflow-y-auto">
+                            <div id="feed-empty" class="flex flex-col items-center justify-center py-14 text-center gap-2 text-slate-400">
+                                <i class="fa-solid fa-box-open text-3xl"></i>
+                                <p class="text-sm">ยังไม่มีรายการแชร์ในห้องนี้</p>
+                                <p class="text-xs">ส่งข้อความ ลิงก์ หรือไฟล์แรกของคุณได้เลย</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT: Members panel (sidebar on desktop, drawer on mobile) -->
+                <div id="members-panel-wrap" class="hidden lg:block">
+                    <div class="bg-white dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-3xl shadow-xl p-5 space-y-4 lg:sticky lg:top-20">
+                        <div class="flex items-center justify-between">
+                            <h3 class="font-bold text-sm text-slate-600 dark:text-slate-300"><i class="fa-solid fa-users mr-1.5 text-indigo-400"></i>สมาชิกในห้อง</h3>
+                            <span id="member-count-badge" class="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">0 / 10</span>
+                        </div>
+                        <div id="members-list" class="space-y-1.5 max-h-[60vh] overflow-y-auto"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Members Drawer -->
+        <div id="members-drawer-backdrop" class="hidden fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm lg:hidden" onclick="toggleMembersPanel()"></div>
+        <div id="members-drawer" class="hidden fixed right-0 top-0 bottom-0 z-40 w-[85%] max-w-xs bg-white dark:bg-slate-950 shadow-2xl p-5 space-y-4 lg:hidden overflow-y-auto transform transition-transform duration-300 translate-x-full">
+            <div class="flex items-center justify-between">
+                <h3 class="font-bold text-sm text-slate-600 dark:text-slate-300"><i class="fa-solid fa-users mr-1.5 text-indigo-400"></i>สมาชิกในห้อง</h3>
+                <button onclick="toggleMembersPanel()" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="flex items-center justify-between">
+                <span id="member-count-badge-mobile" class="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">0 / 10</span>
+            </div>
+            <div id="members-list-mobile" class="space-y-1.5"></div>
+        </div>
+
+    </main>
+
+    <footer class="border-t border-slate-100 dark:border-slate-900 py-4 text-center text-xs text-slate-400 dark:text-slate-600">
+        DDShareMe &mdash; แชร์ไฟล์และข้อความแบบเรียลไทม์ผ่าน Firebase
+    </footer>
+
+    <script type="module">
+        // ============================================================
+        //  DDShareMe — Realtime File & Link Sharing
+        //  Backend: Firebase Realtime Database (anonymous auth)
+        // ============================================================
+
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import {
+            getAuth, signInAnonymously, onAuthStateChanged
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import {
+            getDatabase, ref, set, get, push, update, remove, onValue, off,
+            onDisconnect, serverTimestamp, query, orderByChild, equalTo, child
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+
+        /* ------------------------------------------------------------
+         *  1) FIREBASE CONFIG
+         *  ---------------------------------------------------------
+         *  วางค่า config จากโปรเจกต์ Firebase ของคุณตรงนี้
+         *  (Firebase Console → Project Settings → General → Your apps → SDK setup and configuration)
+         *
+         *  ต้องเปิดใช้งาน 2 อย่างในคอนโซลก่อนใช้งานจริง:
+         *   1. Authentication → Sign-in method → เปิด "Anonymous"
+         *   2. Realtime Database → สร้างฐานข้อมูล แล้วตั้ง Rules ตามตัวอย่างท้ายไฟล์นี้ (ในคอมเมนต์)
+         * ------------------------------------------------------------ */
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        const CONFIG_IS_PLACEHOLDER = firebaseConfig.apiKey === "YOUR_API_KEY";
+
+        let app, auth, db;
+        if (!CONFIG_IS_PLACEHOLDER) {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getDatabase(app);
+        }
+
+        /* ------------------------------------------------------------
+         *  2) STATE
+         * ------------------------------------------------------------ */
+        const state = {
+            uid: null,
+            nickname: '',
+            currentRoomCode: null,
+            isHost: false,
+            roomMeta: null,
+            members: {},
+            pendingPassword: null,   // password typed on join screen, used only for local check flow
+            listeners: [],           // {ref, callback} pairs to detach on leave
+            feedAutoScroll: true,
+            selectedFiles: [],
+            joinRequestRoomCode: null,
+        };
+
+        const MAX_FILE_BYTES = 700 * 1024; // ~700KB safe ceiling for a single RTDB node value
+        const RECENT_ROOMS_KEY = 'ddshareme_recent_rooms';
+        const NICKNAME_KEY = 'ddshareme_nickname';
+        const THEME_KEY = 'ddshareme_theme';
+
+        /* ------------------------------------------------------------
+         *  3) TOAST NOTIFICATIONS
+         * ------------------------------------------------------------ */
+        const toastContainer = document.getElementById('toast-container');
+        const TOAST_STYLES = {
+            success: { icon: 'fa-circle-check', bar: 'bg-emerald-500', iconWrap: 'bg-emerald-500/10 text-emerald-500' },
+            error:   { icon: 'fa-circle-exclamation', bar: 'bg-rose-500', iconWrap: 'bg-rose-500/10 text-rose-500' },
+            info:    { icon: 'fa-circle-info', bar: 'bg-indigo-500', iconWrap: 'bg-indigo-500/10 text-indigo-500' },
+            warning: { icon: 'fa-triangle-exclamation', bar: 'bg-amber-500', iconWrap: 'bg-amber-500/10 text-amber-500' },
+        };
+
+        function showToast(message, type = 'info', duration = 4000) {
+            const style = TOAST_STYLES[type] || TOAST_STYLES.info;
+            const el = document.createElement('div');
+            el.className = 'pointer-events-auto animate-slide-up bg-white dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden relative';
+            el.innerHTML = `
+                <div class="flex items-start gap-3 p-4 pr-10">
+                    <div class="w-8 h-8 rounded-xl ${style.iconWrap} flex items-center justify-center flex-shrink-0">
+                        <i class="fa-solid ${style.icon} text-sm"></i>
+                    </div>
+                    <p class="text-sm font-medium text-slate-700 dark:text-slate-200 leading-snug pt-1">${escapeHtml(message)}</p>
+                </div>
+                <button class="absolute top-3 right-3 text-slate-300 hover:text-slate-500 dark:hover:text-slate-400 transition-colors" aria-label="close">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+                <div class="h-0.5 ${style.bar} toast-progress" style="width:100%"></div>
+            `;
+            const closeBtn = el.querySelector('button');
+            const removeToast = () => {
+                el.style.opacity = '0';
+                el.style.transform = 'translateX(20px)';
+                el.style.transition = 'all 0.25s ease';
+                setTimeout(() => el.remove(), 250);
+            };
+            closeBtn.addEventListener('click', removeToast);
+            toastContainer.prepend(el);
+
+            const bar = el.querySelector('.toast-progress');
+            bar.style.transition = `width ${duration}ms linear`;
+            requestAnimationFrame(() => { bar.style.width = '0%'; });
+
+            const timer = setTimeout(removeToast, duration);
+            el.addEventListener('mouseenter', () => clearTimeout(timer));
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str ?? '';
+            return div.innerHTML;
+        }
+
+        /* ------------------------------------------------------------
+         *  4) THEME TOGGLE
+         * ------------------------------------------------------------ */
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        function applyTheme(theme) {
+            if (theme === 'dark') document.documentElement.classList.add('dark');
+            else document.documentElement.classList.remove('dark');
+        }
+        function initTheme() {
+            const saved = localStorage.getItem(THEME_KEY);
+            if (saved) { applyTheme(saved); return; }
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            applyTheme(prefersDark ? 'dark' : 'light');
+        }
+        themeToggleBtn.addEventListener('click', () => {
+            const isDark = document.documentElement.classList.contains('dark');
+            const next = isDark ? 'light' : 'dark';
+            applyTheme(next);
+            localStorage.setItem(THEME_KEY, next);
+        });
+        initTheme();
+
+        /* ------------------------------------------------------------
+         *  5) CONNECTION STATUS
+         * ------------------------------------------------------------ */
+        const connIndicator = document.getElementById('connection-indicator');
+        const connDot = document.getElementById('connection-dot');
+        const connText = document.getElementById('connection-text');
+
+        function setConnectionUI(mode) {
+            // mode: 'checking' | 'online' | 'offline' | 'unconfigured'
+            connIndicator.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors';
+            if (mode === 'online') {
+                connIndicator.classList.add('bg-emerald-500/10', 'text-emerald-600', 'dark:text-emerald-400');
+                connDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+                connText.textContent = 'ออนไลน์';
+            } else if (mode === 'offline') {
+                connIndicator.classList.add('bg-rose-500/10', 'text-rose-600', 'dark:text-rose-400');
+                connDot.className = 'w-2 h-2 rounded-full bg-rose-500 animate-pulse';
+                connText.textContent = 'ขาดการเชื่อมต่อ';
+            } else if (mode === 'unconfigured') {
+                connIndicator.classList.add('bg-slate-500/10', 'text-slate-500', 'dark:text-slate-400');
+                connDot.className = 'w-2 h-2 rounded-full bg-slate-400';
+                connText.textContent = 'ยังไม่ตั้งค่า Firebase';
+            } else {
+                connIndicator.classList.add('bg-amber-500/10', 'text-amber-600', 'dark:text-amber-400');
+                connDot.className = 'w-2 h-2 rounded-full bg-amber-500 animate-pulse';
+                connText.textContent = 'กำลังตรวจสอบ...';
+            }
+        }
+
+        /* ------------------------------------------------------------
+         *  6) VIEW ROUTER
+         * ------------------------------------------------------------ */
+        const VIEWS = ['view-home', 'view-create', 'view-join', 'view-waiting', 'view-room'];
+        function showView(id) {
+            VIEWS.forEach(v => {
+                const el = document.getElementById(v);
+                if (!el) return;
+                if (v === id) { el.classList.remove('hidden'); }
+                else { el.classList.add('hidden'); }
+            });
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        window.goHome = function goHome() {
+            if (state.currentRoomCode) {
+                leaveRoomPrompt();
+                return;
+            }
+            detachAllListeners();
+            state.currentRoomCode = null;
+            showView('view-home');
+            renderRecentRooms();
+        };
+
+        window.showCreateRoomConfig = function showCreateRoomConfig() {
+            if (!requireNickname()) return;
+            showView('view-create');
+        };
+
+        window.showJoinRoomConfig = function showJoinRoomConfig(prefillCode = '') {
+            if (!requireNickname()) return;
+            showView('view-join');
+            if (prefillCode) {
+                document.getElementById('join-room-code').value = prefillCode;
+            }
+        };
+
+        function requireNickname() {
+            const input = document.getElementById('input-nickname');
+            const val = input.value.trim();
+            if (!val) {
+                showToast('กรุณาระบุชื่อเล่นของคุณก่อนเริ่มใช้งาน', 'warning');
+                input.focus();
+                return false;
+            }
+            if (val.length > 20) {
+                showToast('ชื่อเล่นต้องไม่เกิน 20 ตัวอักษร', 'warning');
+                return false;
+            }
+            state.nickname = val;
+            localStorage.setItem(NICKNAME_KEY, val);
+            return true;
+        }
+
+        /* ------------------------------------------------------------
+         *  7) FIREBASE AUTH BOOTSTRAP
+         * ------------------------------------------------------------ */
+        function initAuth() {
+            if (CONFIG_IS_PLACEHOLDER) {
+                setConnectionUI('unconfigured');
+                showToast('ยังไม่ได้ตั้งค่า Firebase — โปรดใส่ firebaseConfig ในโค้ด (ดูคอมเมนต์ในไฟล์) เพื่อให้ระบบทำงานได้จริง', 'warning', 9000);
+                lockAllActionButtons(true, 'ต้องตั้งค่า Firebase ก่อนใช้งาน');
+                return;
+            }
+
+            setConnectionUI('checking');
+
+            // Firebase's own built-in presence path for connection state
+            const connectedRef = ref(db, '.info/connected');
+            onValue(connectedRef, (snap) => {
+                if (snap.val() === true) {
+                    setConnectionUI('online');
+                } else {
+                    setConnectionUI('offline');
+                }
+            });
+
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    state.uid = user.uid;
+                    lockAllActionButtons(false);
+                    const savedName = localStorage.getItem(NICKNAME_KEY);
+                    if (savedName) document.getElementById('input-nickname').value = savedName;
+                    renderRecentRooms();
+                    maybeAutoJoinFromUrl();
+                } else {
+                    signInAnonymously(auth).catch((err) => {
+                        console.error('Anonymous sign-in failed', err);
+                        showToast('เข้าสู่ระบบไม่สำเร็จ: ' + describeAuthError(err), 'error', 7000);
+                        setConnectionUI('offline');
+                    });
+                }
+            });
+        }
+
+        function describeAuthError(err) {
+            const code = err && err.code ? err.code : '';
+            if (code.includes('admin-restricted-operation') || code.includes('operation-not-allowed')) {
+                return 'ยังไม่ได้เปิดใช้งาน Anonymous Sign-in ใน Firebase Console';
+            }
+            if (code.includes('network-request-failed')) return 'เครือข่ายมีปัญหา กรุณาลองใหม่';
+            return err?.message || 'ไม่ทราบสาเหตุ';
+        }
+
+        function lockAllActionButtons(locked, reason) {
+            ['btn-create-room', 'btn-join-room'].forEach(id => {
+                const btn = document.getElementById(id);
+                if (!btn) return;
+                btn.disabled = locked;
+                if (locked && reason) btn.title = reason;
+            });
+        }
+
+        /* ------------------------------------------------------------
+         *  8) ROOM CODE / HELPERS
+         * ------------------------------------------------------------ */
+        function generateRoomCode() {
+            return String(Math.floor(100000 + Math.random() * 900000));
+        }
+
+        async function findAvailableRoomCode() {
+            for (let attempt = 0; attempt < 8; attempt++) {
+                const code = generateRoomCode();
+                const snap = await get(ref(db, `rooms/${code}/meta`));
+                if (!snap.exists()) return code;
+            }
+            throw new Error('สร้างรหัสห้องไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+        }
+
+        // Lightweight non-cryptographic hash — good enough to avoid storing
+        // plaintext passwords in the DB for a casual sharing tool. This is not
+        // a substitute for real authentication/security-sensitive use cases.
+        async function hashPassword(pw) {
+            const enc = new TextEncoder().encode(pw);
+            const digest = await crypto.subtle.digest('SHA-256', enc);
+            return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function togglePasswordInput(checked) {
+            document.getElementById('create-password-container').classList.toggle('hidden', !checked);
+            if (!checked) document.getElementById('create-room-password').value = '';
+        }
+        window.togglePasswordInput = togglePasswordInput;
+
+        /* ------------------------------------------------------------
+         *  9) CREATE ROOM
+         * ------------------------------------------------------------ */
+        window.handleCreateRoom = async function handleCreateRoom() {
+            if (CONFIG_IS_PLACEHOLDER) { showToast('ยังไม่ได้ตั้งค่า Firebase ในโค้ด', 'error'); return; }
+            if (!state.uid) { showToast('ระบบยังเชื่อมต่อไม่เสร็จ กรุณารอสักครู่', 'warning'); return; }
+
+            const roomName = document.getElementById('create-room-name').value.trim() || `ห้องของ ${state.nickname}`;
+            const maxUsers = parseInt(document.getElementById('create-max-users').value, 10);
+            const requireApproval = document.getElementById('toggle-approval').checked;
+            const hasPassword = document.getElementById('toggle-password').checked;
+            const passwordVal = document.getElementById('create-room-password').value;
+
+            if (hasPassword && !passwordVal.trim()) {
+                showToast('กรุณาตั้งรหัสผ่าน หรือปิดตัวเลือก "บังคับใช้รหัสผ่าน"', 'warning');
+                return;
+            }
+
+            const btn = document.getElementById('btn-create-room');
+            setButtonLoading(btn, true, 'กำลังสร้างห้อง...');
+
+            try {
+                const code = await findAvailableRoomCode();
+                const passwordHash = hasPassword ? await hashPassword(passwordVal) : null;
+
+                const meta = {
+                    name: roomName,
+                    hostId: state.uid,
+                    hostName: state.nickname,
+                    maxUsers,
+                    requireApproval,
+                    hasPassword,
+                    passwordHash,
+                    createdAt: serverTimestamp(),
+                };
+
+                await set(ref(db, `rooms/${code}/meta`), meta);
+                await set(ref(db, `rooms/${code}/members/${state.uid}`), {
+                    nickname: state.nickname,
+                    isHost: true,
+                    status: 'approved',
+                    joinedAt: serverTimestamp(),
+                    lastSeen: serverTimestamp(),
+                });
+
+                saveRecentRoom(code, roomName);
+                await enterRoom(code, true);
+                showToast(`สร้างห้อง #${code} สำเร็จแล้ว!`, 'success');
+            } catch (err) {
+                console.error(err);
+                showToast('สร้างห้องไม่สำเร็จ: ' + (err.message || 'ไม่ทราบสาเหตุ'), 'error');
+            } finally {
+                setButtonLoading(btn, false);
+            }
+        };
+
+        /* ------------------------------------------------------------
+         *  10) JOIN ROOM
+         * ------------------------------------------------------------ */
+        // Watch the join code field to reveal password field pre-emptively based on
+        // a lookup, so the user isn't surprised after clicking submit.
+        document.getElementById('join-room-code').addEventListener('input', async (e) => {
+            e.target.value = e.target.value.replace(/[^0-9]/g, '');
+            const code = e.target.value;
+            const container = document.getElementById('join-password-container');
+            if (code.length === 6 && !CONFIG_IS_PLACEHOLDER && db) {
+                try {
+                    const snap = await get(ref(db, `rooms/${code}/meta/hasPassword`));
+                    container.classList.toggle('hidden', !snap.val());
+                } catch { /* silent — validated again on submit */ }
+            } else {
+                container.classList.add('hidden');
+            }
+        });
+
+        window.handleJoinRoom = async function handleJoinRoom() {
+            if (CONFIG_IS_PLACEHOLDER) { showToast('ยังไม่ได้ตั้งค่า Firebase ในโค้ด', 'error'); return; }
+            if (!state.uid) { showToast('ระบบยังเชื่อมต่อไม่เสร็จ กรุณารอสักครู่', 'warning'); return; }
+
+            const code = document.getElementById('join-room-code').value.trim();
+            const passwordVal = document.getElementById('join-room-password').value;
+
+            if (code.length !== 6) {
+                showToast('กรุณาระบุรหัสห้องให้ครบ 6 หลัก', 'warning');
+                return;
+            }
+
+            const btn = document.getElementById('btn-join-room');
+            setButtonLoading(btn, true, 'กำลังตรวจสอบ...');
+
+            try {
+                const metaSnap = await get(ref(db, `rooms/${code}/meta`));
+                if (!metaSnap.exists()) {
+                    showToast('ไม่พบห้องนี้ กรุณาตรวจสอบรหัสห้องอีกครั้ง', 'error');
+                    return;
+                }
+                const meta = metaSnap.val();
+
+                if (meta.hasPassword) {
+                    const hash = await hashPassword(passwordVal);
+                    if (!passwordVal || hash !== meta.passwordHash) {
+                        document.getElementById('join-password-container').classList.remove('hidden');
+                        showToast('รหัสผ่านไม่ถูกต้อง', 'error');
+                        return;
+                    }
+                }
+
+                const membersSnap = await get(ref(db, `rooms/${code}/members`));
+                const members = membersSnap.val() || {};
+                const memberCount = Object.values(members).filter(m => m.status === 'approved' || m.status === 'pending').length;
+
+                // Already a member? Just re-enter (covers refresh / reconnect).
+                if (members[state.uid]) {
+                    if (members[state.uid].status === 'kicked') {
+                        showToast('คุณถูกนำออกจากห้องนี้แล้ว ไม่สามารถเข้าร่วมซ้ำได้', 'error');
+                        return;
+                    }
+                    if (members[state.uid].status === 'pending') {
+                        await enterWaitingRoom(code, meta);
+                        return;
+                    }
+                    await enterRoom(code, members[state.uid].isHost === true);
+                    return;
+                }
+
+                if (memberCount >= meta.maxUsers) {
+                    showToast('ห้องนี้เต็มแล้ว ไม่สามารถเข้าร่วมเพิ่มได้', 'error');
+                    return;
+                }
+
+                if (meta.requireApproval) {
+                    await set(ref(db, `rooms/${code}/members/${state.uid}`), {
+                        nickname: state.nickname,
+                        isHost: false,
+                        status: 'pending',
+                        joinedAt: serverTimestamp(),
+                        lastSeen: serverTimestamp(),
+                    });
+                    await enterWaitingRoom(code, meta);
+                } else {
+                    await set(ref(db, `rooms/${code}/members/${state.uid}`), {
+                        nickname: state.nickname,
+                        isHost: false,
+                        status: 'approved',
+                        joinedAt: serverTimestamp(),
+                        lastSeen: serverTimestamp(),
+                    });
+                    saveRecentRoom(code, meta.name);
+                    await enterRoom(code, false);
+                    showToast(`เข้าร่วมห้อง "${meta.name}" สำเร็จ`, 'success');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('เข้าร่วมห้องไม่สำเร็จ: ' + (err.message || 'ไม่ทราบสาเหตุ'), 'error');
+            } finally {
+                setButtonLoading(btn, false);
+            }
+        };
+
+        function setButtonLoading(btn, loading, label) {
+            if (!btn) return;
+            if (loading) {
+                btn.dataset.originalHtml = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i><span>${label || 'กำลังดำเนินการ...'}</span>`;
+            } else {
+                btn.disabled = false;
+                if (btn.dataset.originalHtml) btn.innerHTML = btn.dataset.originalHtml;
+            }
+        }
+
+        /* ------------------------------------------------------------
+         *  11) WAITING ROOM (pending approval)
+         * ------------------------------------------------------------ */
+        async function enterWaitingRoom(code, meta) {
+            state.joinRequestRoomCode = code;
+            document.getElementById('waiting-room-name').textContent = `"${meta.name}"`;
+            showView('view-waiting');
+
+            const myStatusRef = ref(db, `rooms/${code}/members/${state.uid}/status`);
+            const cb = onValue(myStatusRef, async (snap) => {
+                const status = snap.val();
+                if (status === 'approved') {
+                    off(myStatusRef, 'value', cb);
+                    saveRecentRoom(code, meta.name);
+                    await enterRoom(code, false);
+                    showToast('แอดมินอนุมัติคำขอของคุณแล้ว ยินดีต้อนรับ!', 'success');
+                } else if (status === 'kicked' || status === null) {
+                    off(myStatusRef, 'value', cb);
+                    showToast('คำขอเข้าร่วมของคุณถูกปฏิเสธ หรือห้องถูกปิดแล้ว', 'error');
+                    showView('view-home');
+                    state.joinRequestRoomCode = null;
+                }
+            });
+            state.listeners.push({ ref: myStatusRef, event: 'value', cb });
+        }
+
+        window.cancelWaitingRequest = async function cancelWaitingRequest() {
+            if (!state.joinRequestRoomCode) { showView('view-home'); return; }
+            try {
+                await remove(ref(db, `rooms/${state.joinRequestRoomCode}/members/${state.uid}`));
+            } catch (err) { console.error(err); }
+            detachAllListeners();
+            state.joinRequestRoomCode = null;
+            showView('view-home');
+            showToast('ยกเลิกคำขอเข้าร่วมแล้ว', 'info');
+        };
+
+        /* ------------------------------------------------------------
+         *  12) ENTER ROOM / REALTIME LISTENERS
+         * ------------------------------------------------------------ */
+        async function enterRoom(code, isHost) {
+            detachAllListeners();
+            state.currentRoomCode = code;
+            state.isHost = isHost;
+            document.getElementById('feed-list').querySelectorAll('.msg-row').forEach(n => n.remove());
+            document.getElementById('feed-empty').classList.remove('hidden');
+
+            // Presence: mark offline handling via onDisconnect
+            const myMemberRef = ref(db, `rooms/${code}/members/${state.uid}`);
+            onDisconnect(myMemberRef).update({ lastSeen: serverTimestamp(), online: false });
+            await update(myMemberRef, { online: true, lastSeen: serverTimestamp() });
+
+            // Meta listener
+            const metaRef = ref(db, `rooms/${code}/meta`);
+            const metaCb = onValue(metaRef, (snap) => {
+                if (!snap.exists()) {
+                    showToast('ห้องนี้ถูกปิดไปแล้ว', 'warning');
+                    forceLeaveToHome();
+                    return;
+                }
+                state.roomMeta = snap.val();
+                renderRoomHeader();
+            });
+            state.listeners.push({ ref: metaRef, event: 'value', cb: metaCb });
+
+            // Members listener
+            const membersRef = ref(db, `rooms/${code}/members`);
+            const membersCb = onValue(membersRef, (snap) => {
+                state.members = snap.val() || {};
+                // If I've been kicked while inside the room, boot me out.
+                const me = state.members[state.uid];
+                if (!me || me.status === 'kicked') {
+                    showToast('คุณถูกนำออกจากห้องนี้', 'error');
+                    forceLeaveToHome();
+                    return;
+                }
+                renderMembers();
+                renderPendingApprovals();
+            });
+            state.listeners.push({ ref: membersRef, event: 'value', cb: membersCb });
+
+            // Messages listener
+            const messagesRef = ref(db, `rooms/${code}/messages`);
+            const messagesCb = onValue(messagesRef, (snap) => {
+                renderFeed(snap.val() || {});
+            });
+            state.listeners.push({ ref: messagesRef, event: 'value', cb: messagesCb });
+
+            updateUrlForRoom(code);
+            showView('view-room');
+            switchComposerTab('text');
+            document.getElementById('input-message').focus();
+        }
+
+        function forceLeaveToHome() {
+            detachAllListeners();
+            state.currentRoomCode = null;
+            state.roomMeta = null;
+            state.members = {};
+            updateUrlForRoom(null);
+            showView('view-home');
+        }
+
+        function detachAllListeners() {
+            state.listeners.forEach(({ ref: r, event, cb }) => {
+                try { off(r, event, cb); } catch (e) { /* ignore */ }
+            });
+            state.listeners = [];
+        }
+
+        /* ------------------------------------------------------------
+         *  13) ROOM HEADER RENDER
+         * ------------------------------------------------------------ */
+        function renderRoomHeader() {
+            const meta = state.roomMeta;
+            if (!meta) return;
+            document.getElementById('room-title').textContent = meta.name;
+            document.getElementById('room-code-text').textContent = state.currentRoomCode;
+            document.getElementById('room-lock-badge').classList.toggle('hidden', !meta.hasPassword);
+            document.getElementById('room-approval-badge').classList.toggle('hidden', !meta.requireApproval);
+        }
+
+        window.copyRoomCode = function copyRoomCode() {
+            if (!state.currentRoomCode) return;
+            copyToClipboard(state.currentRoomCode, 'คัดลอกรหัสห้องแล้ว');
+        };
+
+        window.shareRoomLink = function shareRoomLink() {
+            if (!state.currentRoomCode) return;
+            const url = buildRoomUrl(state.currentRoomCode);
+            if (navigator.share) {
+                navigator.share({ title: state.roomMeta?.name || 'DDShareMe', text: 'เข้าร่วมห้องแชร์ไฟล์ของฉันบน DDShareMe', url }).catch(() => {});
+            } else {
+                copyToClipboard(url, 'คัดลอกลิงก์ห้องแล้ว');
+            }
+        };
+
+        function copyToClipboard(text, successMsg) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast(successMsg, 'success', 2200);
+            }).catch(() => {
+                // Fallback for older/insecure contexts
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand('copy'); showToast(successMsg, 'success', 2200); }
+                catch { showToast('คัดลอกไม่สำเร็จ', 'error'); }
+                ta.remove();
+            });
+        }
+
+        function buildRoomUrl(code) {
+            const url = new URL(window.location.href);
+            url.search = '';
+            url.searchParams.set('room', code);
+            return url.toString();
+        }
+
+        function updateUrlForRoom(code) {
+            const url = new URL(window.location.href);
+            url.search = '';
+            if (code) url.searchParams.set('room', code);
+            window.history.replaceState({}, '', url.toString());
+        }
+
+        function maybeAutoJoinFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const code = params.get('room');
+            if (code && /^\d{6}$/.test(code)) {
+                const savedName = localStorage.getItem(NICKNAME_KEY);
+                if (savedName) {
+                    document.getElementById('input-nickname').value = savedName;
+                    state.nickname = savedName;
+                    showJoinRoomConfig(code);
+                    showToast('พบลิงก์เชิญเข้าห้อง กรุณายืนยันชื่อเล่นแล้วกดเข้าร่วม', 'info', 5000);
+                } else {
+                    showJoinRoomConfig(code);
+                }
+            }
+        }
+
+        /* ------------------------------------------------------------
+         *  14) MEMBERS PANEL
+         * ------------------------------------------------------------ */
+        function renderMembers() {
+            const approved = Object.entries(state.members)
+                .filter(([, m]) => m.status === 'approved')
+                .sort(([, a], [, b]) => (a.isHost ? -1 : 0) - (b.isHost ? -1 : 0) || (a.joinedAt || 0) - (b.joinedAt || 0));
+
+            const max = state.roomMeta?.maxUsers ?? '-';
+            const countText = `${approved.length} / ${max}`;
+            document.getElementById('member-count-badge').textContent = countText;
+            document.getElementById('member-count-badge-mobile').textContent = countText;
+            document.getElementById('member-count-dot').textContent = approved.length;
+
+            const rowsHtml = approved.map(([uid, m]) => {
+                const isMe = uid === state.uid;
+                const initials = (m.nickname || '?').trim().charAt(0).toUpperCase();
+                const onlineDot = m.online
+                    ? '<span class="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-950"></span>'
+                    : '<span class="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600 ring-2 ring-white dark:ring-slate-950"></span>';
+
+                let actionsHtml = '';
+                if (state.isHost && !isMe) {
+                    actionsHtml = `
+                        <button onclick="kickMember('${uid}', '${escapeJsAttr(m.nickname)}')" class="p-1.5 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-500/10 transition-colors" title="นำออกจากห้อง">
+                            <i class="fa-solid fa-user-xmark text-xs"></i>
+                        </button>`;
+                }
+
+                return `
+                    <div class="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors group">
+                        <div class="relative flex-shrink-0">
+                            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 text-white flex items-center justify-center text-xs font-bold">${escapeHtml(initials)}</div>
+                            <span class="absolute -bottom-0.5 -right-0.5">${onlineDot}</span>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-sm font-semibold truncate">${escapeHtml(m.nickname)}${isMe ? ' <span class="text-slate-400 font-normal">(คุณ)</span>' : ''}</p>
+                            ${m.isHost ? '<p class="text-[11px] text-amber-500 font-medium"><i class="fa-solid fa-crown text-[10px] mr-0.5"></i>เจ้าของห้อง</p>' : '<p class="text-[11px] text-slate-400">สมาชิก</p>'}
+                        </div>
+                        ${actionsHtml}
+                    </div>`;
+            }).join('');
+
+            document.getElementById('members-list').innerHTML = rowsHtml || '<p class="text-xs text-slate-400 text-center py-4">ยังไม่มีสมาชิก</p>';
+            document.getElementById('members-list-mobile').innerHTML = rowsHtml || '<p class="text-xs text-slate-400 text-center py-4">ยังไม่มีสมาชิก</p>';
+        }
+
+        function escapeJsAttr(str) {
+            return String(str ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        }
+
+        window.toggleMembersPanel = function toggleMembersPanel() {
+            const drawer = document.getElementById('members-drawer');
+            const backdrop = document.getElementById('members-drawer-backdrop');
+            const isOpen = !drawer.classList.contains('translate-x-full');
+            if (isOpen) {
+                drawer.classList.add('translate-x-full');
+                setTimeout(() => { drawer.classList.add('hidden'); backdrop.classList.add('hidden'); }, 300);
+            } else {
+                drawer.classList.remove('hidden');
+                backdrop.classList.remove('hidden');
+                requestAnimationFrame(() => drawer.classList.remove('translate-x-full'));
+            }
+        };
+
+        /* ------------------------------------------------------------
+         *  15) PENDING APPROVALS (host)
+         * ------------------------------------------------------------ */
+        function renderPendingApprovals() {
+            const card = document.getElementById('pending-approvals-card');
+            if (!state.isHost) { card.classList.add('hidden'); return; }
+
+            const pending = Object.entries(state.members).filter(([, m]) => m.status === 'pending');
+            document.getElementById('pending-count').textContent = pending.length;
+
+            if (pending.length === 0) { card.classList.add('hidden'); return; }
+            card.classList.remove('hidden');
+
+            document.getElementById('pending-approvals-list').innerHTML = pending.map(([uid, m]) => `
+                <div class="flex items-center justify-between gap-2 bg-white dark:bg-slate-950/60 rounded-2xl px-3.5 py-2.5">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">${escapeHtml((m.nickname || '?').charAt(0).toUpperCase())}</div>
+                        <p class="text-sm font-semibold truncate">${escapeHtml(m.nickname)}</p>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                        <button onclick="approveMember('${uid}')" class="w-8 h-8 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 flex items-center justify-center transition-colors" title="อนุมัติ">
+                            <i class="fa-solid fa-check text-xs"></i>
+                        </button>
+                        <button onclick="rejectMember('${uid}')" class="w-8 h-8 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 flex items-center justify-center transition-colors" title="ปฏิเสธ">
+                            <i class="fa-solid fa-xmark text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        window.approveMember = async function approveMember(uid) {
+            if (!state.isHost || !state.currentRoomCode) return;
+            try {
+                await update(ref(db, `rooms/${state.currentRoomCode}/members/${uid}`), { status: 'approved' });
+                showToast('อนุมัติสมาชิกใหม่แล้ว', 'success', 2500);
+            } catch (err) { showToast('ดำเนินการไม่สำเร็จ: ' + err.message, 'error'); }
+        };
+
+        window.rejectMember = async function rejectMember(uid) {
+            if (!state.isHost || !state.currentRoomCode) return;
+            try {
+                await remove(ref(db, `rooms/${state.currentRoomCode}/members/${uid}`));
+                showToast('ปฏิเสธคำขอเข้าร่วมแล้ว', 'info', 2500);
+            } catch (err) { showToast('ดำเนินการไม่สำเร็จ: ' + err.message, 'error'); }
+        };
+
+        window.kickMember = function kickMember(uid, nickname) {
+            openConfirmModal({
+                title: 'นำสมาชิกออกจากห้อง',
+                body: `ต้องการนำ "${nickname}" ออกจากห้องนี้ใช่หรือไม่? สมาชิกจะไม่สามารถเข้าร่วมซ้ำได้`,
+                okLabel: 'นำออก',
+                onConfirm: async () => {
+                    try {
+                        await update(ref(db, `rooms/${state.currentRoomCode}/members/${uid}`), { status: 'kicked' });
+                        showToast(`นำ "${nickname}" ออกจากห้องแล้ว`, 'success', 2500);
+                    } catch (err) { showToast('ดำเนินการไม่สำเร็จ: ' + err.message, 'error'); }
+                }
+            });
+        };
+
+        /* ------------------------------------------------------------
+         *  16) COMPOSER TABS
+         * ------------------------------------------------------------ */
+        window.switchComposerTab = function switchComposerTab(tab) {
+            const textTab = document.getElementById('tab-btn-text');
+            const fileTab = document.getElementById('tab-btn-file');
+            const textPane = document.getElementById('composer-text');
+            const filePane = document.getElementById('composer-file');
+
+            const activeCls = ['bg-white', 'dark:bg-slate-800', 'text-indigo-600', 'dark:text-indigo-400', 'shadow-sm'];
+            const inactiveCls = ['text-slate-500', 'dark:text-slate-400'];
+
+            if (tab === 'text') {
+                textTab.classList.add(...activeCls); textTab.classList.remove(...inactiveCls);
+                fileTab.classList.remove(...activeCls); fileTab.classList.add(...inactiveCls);
+                textPane.classList.remove('hidden'); filePane.classList.add('hidden');
+            } else {
+                fileTab.classList.add(...activeCls); fileTab.classList.remove(...inactiveCls);
+                textTab.classList.remove(...activeCls); textTab.classList.add(...inactiveCls);
+                filePane.classList.remove('hidden'); textPane.classList.add('hidden');
+            }
+        };
+
+        /* ------------------------------------------------------------
+         *  17) TEXT / LINK MESSAGES
+         * ------------------------------------------------------------ */
+        const messageInput = document.getElementById('input-message');
+        const charCount = document.getElementById('char-count');
+        messageInput.addEventListener('input', () => {
+            charCount.textContent = `${messageInput.value.length} / 2000`;
+        });
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendTextMessage();
+            }
+        });
+
+        const URL_REGEX = /(https?:\/\/[^\s]+)/i;
+
+        window.sendTextMessage = async function sendTextMessage() {
+            const text = messageInput.value.trim();
+            if (!text) return;
+            if (!state.currentRoomCode) return;
+
+            const isLink = URL_REGEX.test(text) && text.split(/\s+/).length === 1;
+
+            try {
+                const msgRef = push(ref(db, `rooms/${state.currentRoomCode}/messages`));
+                await set(msgRef, {
+                    type: isLink ? 'link' : 'text',
+                    senderId: state.uid,
+                    senderName: state.nickname,
+                    content: text,
+                    timestamp: serverTimestamp(),
+                });
+                messageInput.value = '';
+                charCount.textContent = '0 / 2000';
+                messageInput.focus();
+            } catch (err) {
+                showToast('ส่งข้อความไม่สำเร็จ: ' + err.message, 'error');
+            }
+        };
+
+        /* ------------------------------------------------------------
+         *  18) FILE SHARING
+         * ------------------------------------------------------------ */
+        const fileInput = document.getElementById('file-input');
+        const dropzone = document.getElementById('dropzone');
+
+        fileInput.addEventListener('change', (e) => {
+            handleIncomingFiles(e.target.files);
+            fileInput.value = '';
+        });
+
+        ['dragenter', 'dragover'].forEach(evt => {
+            dropzone.addEventListener(evt, (e) => {
+                e.preventDefault(); e.stopPropagation();
+                dropzone.classList.add('dropzone-active');
+            });
+        });
+        ['dragleave', 'drop'].forEach(evt => {
+            dropzone.addEventListener(evt, (e) => {
+                e.preventDefault(); e.stopPropagation();
+                dropzone.classList.remove('dropzone-active');
+            });
+        });
+        dropzone.addEventListener('drop', (e) => {
+            if (!state.currentRoomCode) return;
+            switchComposerTab('file');
+            if (e.dataTransfer.files.length) handleIncomingFiles(e.dataTransfer.files);
+        });
+
+        function handleIncomingFiles(fileList) {
+            const files = Array.from(fileList);
+            for (const file of files) {
+                if (file.size > MAX_FILE_BYTES) {
+                    showToast(`ไฟล์ "${file.name}" มีขนาดใหญ่เกิน ${formatBytes(MAX_FILE_BYTES)} จึงไม่สามารถส่งได้`, 'error', 5500);
+                    continue;
+                }
+                queueFile(file);
+            }
+        }
+
+        function queueFile(file) {
+            const id = 'f_' + Math.random().toString(36).slice(2, 10);
+            state.selectedFiles.push({ id, file, status: 'queued', progress: 0 });
+            renderFileQueue();
+            uploadQueuedFile(id);
+        }
+
+        function renderFileQueue() {
+            const wrap = document.getElementById('file-queue');
+            if (state.selectedFiles.length === 0) { wrap.innerHTML = ''; return; }
+
+            wrap.innerHTML = state.selectedFiles.map(item => {
+                const icon = fileIconFor(item.file.type, item.file.name);
+                const statusLabel = {
+                    queued: 'รอคิว...', uploading: 'กำลังส่ง...', done: 'ส่งสำเร็จ', error: 'ส่งไม่สำเร็จ'
+                }[item.status];
+                const statusColor = {
+                    queued: 'text-slate-400', uploading: 'text-indigo-500', done: 'text-emerald-500', error: 'text-rose-500'
+                }[item.status];
+                const barColor = item.status === 'error' ? 'bg-rose-500' : 'bg-indigo-500';
+
+                return `
+                <div class="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800" data-file-id="${item.id}">
+                    <div class="w-9 h-9 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center text-indigo-500 flex-shrink-0"><i class="fa-solid ${icon}"></i></div>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-sm font-semibold truncate">${escapeHtml(item.file.name)}</p>
+                        <div class="flex items-center gap-2 mt-1">
+                            <div class="h-1 flex-1 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                                <div class="h-full ${barColor} rounded-full transition-all duration-200" style="width:${item.progress}%"></div>
+                            </div>
+                            <span class="text-[10px] ${statusColor} font-medium flex-shrink-0">${statusLabel}</span>
+                        </div>
+                    </div>
+                    <button onclick="removeQueuedFile('${item.id}')" class="p-1.5 text-slate-300 hover:text-rose-500 transition-colors flex-shrink-0" title="ยกเลิก">
+                        <i class="fa-solid fa-xmark text-xs"></i>
+                    </button>
+                </div>`;
+            }).join('');
+        }
+
+        window.removeQueuedFile = function removeQueuedFile(id) {
+            state.selectedFiles = state.selectedFiles.filter(f => f.id !== id);
+            renderFileQueue();
+        };
+
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function uploadQueuedFile(id) {
+            const item = state.selectedFiles.find(f => f.id === id);
+            if (!item || !state.currentRoomCode) return;
+
+            item.status = 'uploading';
+            item.progress = 30;
+            renderFileQueue();
+
+            try {
+                const dataUrl = await fileToBase64(item.file);
+                item.progress = 70;
+                renderFileQueue();
+
+                const msgRef = push(ref(db, `rooms/${state.currentRoomCode}/messages`));
+                await set(msgRef, {
+                    type: 'file',
+                    senderId: state.uid,
+                    senderName: state.nickname,
+                    timestamp: serverTimestamp(),
+                    fileMeta: {
+                        name: item.file.name,
+                        size: item.file.size,
+                        mime: item.file.type || 'application/octet-stream',
+                        dataUrl,
+                    },
+                });
+
+                item.status = 'done';
+                item.progress = 100;
+                renderFileQueue();
+                setTimeout(() => { removeQueuedFile(id); }, 1800);
+            } catch (err) {
+                console.error(err);
+                item.status = 'error';
+                renderFileQueue();
+                const reason = (err && err.message && err.message.includes('too large'))
+                    ? 'ไฟล์มีขนาดใหญ่เกินกำหนดของฐานข้อมูล'
+                    : (err.message || 'ไม่ทราบสาเหตุ');
+                showToast(`ส่งไฟล์ "${item.file.name}" ไม่สำเร็จ: ${reason}`, 'error', 5500);
+            }
+        }
+
+        function fileIconFor(mime, name) {
+            const ext = (name.split('.').pop() || '').toLowerCase();
+            if ((mime || '').startsWith('image/')) return 'fa-file-image';
+            if ((mime || '').startsWith('video/')) return 'fa-file-video';
+            if ((mime || '').startsWith('audio/')) return 'fa-file-audio';
+            if (['pdf'].includes(ext)) return 'fa-file-pdf';
+            if (['doc', 'docx'].includes(ext)) return 'fa-file-word';
+            if (['xls', 'xlsx', 'csv'].includes(ext)) return 'fa-file-excel';
+            if (['ppt', 'pptx'].includes(ext)) return 'fa-file-powerpoint';
+            if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return 'fa-file-zipper';
+            if (['txt', 'md'].includes(ext)) return 'fa-file-lines';
+            if (['js', 'ts', 'py', 'html', 'css', 'json', 'java', 'c', 'cpp'].includes(ext)) return 'fa-file-code';
+            return 'fa-file';
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+        }
+
+        /* ------------------------------------------------------------
+         *  19) FEED RENDER
+         * ------------------------------------------------------------ */
+        const feedListEl = document.getElementById('feed-list');
+        const feedEmptyEl = document.getElementById('feed-empty');
+        let renderedMessageIds = new Set();
+
+        feedListEl.addEventListener('scroll', () => {
+            const nearBottom = feedListEl.scrollHeight - feedListEl.scrollTop - feedListEl.clientHeight < 60;
+            state.feedAutoScroll = nearBottom;
+        });
+
+        function renderFeed(messages) {
+            const entries = Object.entries(messages).sort(([, a], [, b]) => (a.timestamp || 0) - (b.timestamp || 0));
+
+            if (entries.length === 0) {
+                feedEmptyEl.classList.remove('hidden');
+                feedListEl.querySelectorAll('.msg-row').forEach(n => n.remove());
+                renderedMessageIds = new Set();
+                return;
+            }
+            feedEmptyEl.classList.add('hidden');
+
+            const currentIds = new Set(entries.map(([id]) => id));
+            // Remove rows for deleted messages
+            renderedMessageIds.forEach(id => {
+                if (!currentIds.has(id)) {
+                    const row = feedListEl.querySelector(`[data-msg-id="${id}"]`);
+                    if (row) row.remove();
+                }
+            });
+
+            let appendedNew = false;
+            entries.forEach(([id, msg]) => {
+                if (renderedMessageIds.has(id)) return;
+                const row = buildMessageRow(id, msg);
+                feedListEl.appendChild(row);
+                appendedNew = true;
+            });
+            renderedMessageIds = currentIds;
+
+            if (appendedNew && state.feedAutoScroll) scrollFeedToBottom(false);
+        }
+
+        function buildMessageRow(id, msg) {
+            const isMe = msg.senderId === state.uid;
+            const wrapper = document.createElement('div');
+            wrapper.className = 'msg-row flex gap-2.5';
+            wrapper.dataset.msgId = id;
+
+            const initials = (msg.senderName || '?').trim().charAt(0).toUpperCase();
+            const avatar = `<div class="w-8 h-8 rounded-full bg-gradient-to-br ${isMe ? 'from-indigo-500 to-purple-500' : 'from-slate-400 to-slate-500'} text-white flex items-center justify-center text-xs font-bold flex-shrink-0">${escapeHtml(initials)}</div>`;
+
+            const timeLabel = formatTimestamp(msg.timestamp);
+            const canDelete = isMe || state.isHost;
+            const deleteBtn = canDelete
+                ? `<button onclick="deleteMessage('${id}')" class="opacity-0 group-hover:opacity-100 transition-opacity text-slate-300 hover:text-rose-500 p-1" title="ลบรายการนี้"><i class="fa-solid fa-trash-can text-[11px]"></i></button>`
+                : '';
+
+            let bodyHtml = '';
+            if (msg.type === 'text') {
+                bodyHtml = `<p class="text-sm whitespace-pre-wrap break-words leading-relaxed">${linkifyEscaped(msg.content)}</p>`;
+            } else if (msg.type === 'link') {
+                bodyHtml = `
+                    <a href="${escapeHtml(msg.content)}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400 hover:underline break-all">
+                        <i class="fa-solid fa-link flex-shrink-0"></i>${escapeHtml(msg.content)}
+                    </a>`;
+            } else if (msg.type === 'file') {
+                bodyHtml = buildFileBubble(msg.fileMeta);
+            }
+
+            wrapper.innerHTML = `
+                ${avatar}
+                <div class="min-w-0 flex-1 group">
+                    <div class="flex items-baseline gap-2 mb-1">
+                        <span class="text-xs font-bold text-slate-600 dark:text-slate-300">${escapeHtml(msg.senderName)}${isMe ? ' <span class="text-slate-400 font-normal">(คุณ)</span>' : ''}</span>
+                        <span class="text-[10px] text-slate-400">${timeLabel}</span>
+                        ${deleteBtn}
+                    </div>
+                    <div class="bg-slate-50 dark:bg-slate-900/60 rounded-2xl rounded-tl-sm px-3.5 py-2.5 inline-block max-w-full">${bodyHtml}</div>
+                </div>
+            `;
+            return wrapper;
+        }
+
+        function buildFileBubble(fileMeta) {
+            if (!fileMeta) return '<p class="text-xs text-rose-400">ไม่พบข้อมูลไฟล์</p>';
+            const isImage = (fileMeta.mime || '').startsWith('image/');
+            const sizeLabel = formatBytes(fileMeta.size || 0);
+            const icon = fileIconFor(fileMeta.mime, fileMeta.name);
+
+            if (isImage) {
+                return `
+                    <div class="space-y-1.5">
+                        <img src="${fileMeta.dataUrl}" alt="${escapeHtml(fileMeta.name)}" class="max-w-[220px] max-h-[220px] rounded-xl cursor-zoom-in object-cover" onclick="openLightbox('${fileMeta.dataUrl.replace(/'/g, "\\'")}')">
+                        <div class="flex items-center justify-between gap-3">
+                            <p class="text-xs text-slate-500 dark:text-slate-400 truncate">${escapeHtml(fileMeta.name)} · ${sizeLabel}</p>
+                            <a href="${fileMeta.dataUrl}" download="${escapeHtml(fileMeta.name)}" class="text-xs font-semibold text-indigo-500 hover:text-indigo-600 flex-shrink-0"><i class="fa-solid fa-download"></i></a>
+                        </div>
+                    </div>`;
+            }
+
+            return `
+                <a href="${fileMeta.dataUrl}" download="${escapeHtml(fileMeta.name)}" class="flex items-center gap-3 min-w-[200px] max-w-[260px]">
+                    <div class="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center text-indigo-500 flex-shrink-0"><i class="fa-solid ${icon}"></i></div>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-sm font-semibold truncate">${escapeHtml(fileMeta.name)}</p>
+                        <p class="text-xs text-slate-400">${sizeLabel} · ดาวน์โหลด</p>
+                    </div>
+                    <i class="fa-solid fa-download text-slate-400 flex-shrink-0"></i>
+                </a>`;
+        }
+
+        function linkifyEscaped(text) {
+            const escaped = escapeHtml(text);
+            return escaped.replace(/(https?:\/\/[^\s<]+)/gi, url => `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-indigo-500 hover:underline break-all">${url}</a>`);
+        }
+
+        function formatTimestamp(ts) {
+            if (!ts) return 'กำลังส่ง...';
+            const d = new Date(ts);
+            const now = new Date();
+            const isToday = d.toDateString() === now.toDateString();
+            const timeStr = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+            if (isToday) return timeStr;
+            return d.toLocaleDateString('th-TH', { day: '2-digit', month: 'short' }) + ' ' + timeStr;
+        }
+
+        window.scrollFeedToBottom = function scrollFeedToBottom(smooth) {
+            state.feedAutoScroll = true;
+            feedListEl.scrollTo({ top: feedListEl.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+        };
+
+        window.deleteMessage = function deleteMessage(id) {
+            openConfirmModal({
+                title: 'ลบรายการนี้',
+                body: 'ต้องการลบรายการนี้ออกจากห้องใช่หรือไม่? การลบไม่สามารถย้อนกลับได้',
+                okLabel: 'ลบเลย',
+                onConfirm: async () => {
+                    try {
+                        await remove(ref(db, `rooms/${state.currentRoomCode}/messages/${id}`));
+                    } catch (err) { showToast('ลบไม่สำเร็จ: ' + err.message, 'error'); }
+                }
+            });
+        };
+
+        /* ------------------------------------------------------------
+         *  20) LIGHTBOX
+         * ------------------------------------------------------------ */
+        window.openLightbox = function openLightbox(src) {
+            document.getElementById('lightbox-img').src = src;
+            const lb = document.getElementById('lightbox');
+            lb.classList.remove('hidden');
+            lb.classList.add('flex');
+        };
+        window.closeLightbox = function closeLightbox() {
+            const lb = document.getElementById('lightbox');
+            lb.classList.add('hidden');
+            lb.classList.remove('flex');
+            document.getElementById('lightbox-img').src = '';
+        };
+
+        /* ------------------------------------------------------------
+         *  21) LEAVE ROOM / DELETE ROOM
+         * ------------------------------------------------------------ */
+        window.leaveRoomPrompt = function leaveRoomPrompt() {
+            if (!state.currentRoomCode) { showView('view-home'); return; }
+            const isLastHostAction = state.isHost;
+            openConfirmModal({
+                title: isLastHostAction ? 'ออกจากห้องและปิดห้องนี้' : 'ออกจากห้อง',
+                body: isLastHostAction
+                    ? 'คุณเป็นเจ้าของห้องนี้ การออกจากห้องจะปิดห้องนี้ถาวรและนำสมาชิกทุกคนออกด้วย ต้องการดำเนินการต่อหรือไม่?'
+                    : 'ต้องการออกจากห้องนี้ใช่หรือไม่?',
+                okLabel: isLastHostAction ? 'ปิดห้องและออก' : 'ออกจากห้อง',
+                onConfirm: performLeaveRoom,
+            });
+        };
+
+        async function performLeaveRoom() {
+            const code = state.currentRoomCode;
+            const wasHost = state.isHost;
+            try {
+                if (wasHost) {
+                    await remove(ref(db, `rooms/${code}`));
+                } else {
+                    await remove(ref(db, `rooms/${code}/members/${state.uid}`));
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('ออกจากห้องไม่สมบูรณ์: ' + err.message, 'warning');
+            }
+            detachAllListeners();
+            state.currentRoomCode = null;
+            state.roomMeta = null;
+            state.members = {};
+            state.selectedFiles = [];
+            updateUrlForRoom(null);
+            showView('view-home');
+            renderRecentRooms();
+            showToast(wasHost ? 'ปิดห้องเรียบร้อยแล้ว' : 'ออกจากห้องแล้ว', 'info');
+        }
+
+        /* ------------------------------------------------------------
+         *  22) CONFIRM MODAL (generic reusable)
+         * ------------------------------------------------------------ */
+        const confirmModal = document.getElementById('confirm-modal');
+        let pendingConfirmAction = null;
+
+        function openConfirmModal({ title, body, okLabel, onConfirm }) {
+            document.getElementById('confirm-modal-title').textContent = title;
+            document.getElementById('confirm-modal-body').textContent = body;
+            document.getElementById('confirm-modal-ok').textContent = okLabel || 'ยืนยัน';
+            pendingConfirmAction = onConfirm;
+            confirmModal.classList.remove('hidden');
+            confirmModal.classList.add('flex');
+        }
+        function closeConfirmModal() {
+            confirmModal.classList.add('hidden');
+            confirmModal.classList.remove('flex');
+            pendingConfirmAction = null;
+        }
+        document.getElementById('confirm-modal-cancel').addEventListener('click', closeConfirmModal);
+        document.getElementById('confirm-modal-ok').addEventListener('click', async () => {
+            const action = pendingConfirmAction;
+            closeConfirmModal();
+            if (action) await action();
+        });
+        confirmModal.addEventListener('click', (e) => { if (e.target === confirmModal) closeConfirmModal(); });
+
+        /* ------------------------------------------------------------
+         *  23) RECENT ROOMS (local history on this device)
+         * ------------------------------------------------------------ */
+        function saveRecentRoom(code, name) {
+            let list = getRecentRooms();
+            list = list.filter(r => r.code !== code);
+            list.unshift({ code, name, at: Date.now() });
+            list = list.slice(0, 5);
+            localStorage.setItem(RECENT_ROOMS_KEY, JSON.stringify(list));
+        }
+        function getRecentRooms() {
+            try { return JSON.parse(localStorage.getItem(RECENT_ROOMS_KEY) || '[]'); }
+            catch { return []; }
+        }
+        window.clearRecentRooms = function clearRecentRooms() {
+            localStorage.removeItem(RECENT_ROOMS_KEY);
+            renderRecentRooms();
+        };
+        function renderRecentRooms() {
+            const list = getRecentRooms();
+            const wrap = document.getElementById('recent-rooms-wrap');
+            const listEl = document.getElementById('recent-rooms-list');
+            if (list.length === 0) { wrap.classList.add('hidden'); return; }
+            wrap.classList.remove('hidden');
+            listEl.innerHTML = list.map(r => `
+                <button onclick="quickRejoin('${r.code}')" class="w-full flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-950 border border-slate-100 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-800 transition-colors text-left">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-clock-rotate-left text-sm"></i></div>
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold truncate">${escapeHtml(r.name)}</p>
+                            <p class="text-xs text-slate-400 font-mono">#${escapeHtml(r.code)}</p>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-xs text-slate-300"></i>
+                </button>
+            `).join('');
+        }
+        window.quickRejoin = function quickRejoin(code) {
+            if (!requireNickname()) return;
+            showJoinRoomConfig(code);
+        };
+
+        /* ------------------------------------------------------------
+         *  24) BOOTSTRAP
+         * ------------------------------------------------------------ */
+        showView('view-home');
+        initAuth();
+
+        window.addEventListener('beforeunload', () => {
+            if (state.currentRoomCode && !state.isHost && state.uid) {
+                // Best-effort presence flag; onDisconnect already handles the
+                // authoritative server-side cleanup for abrupt tab closes.
+                try {
+                    update(ref(db, `rooms/${state.currentRoomCode}/members/${state.uid}`), { online: false });
+                } catch (e) { /* ignore */ }
+            }
+        });
+
+        /* ------------------------------------------------------------
+         *  25) SUGGESTED FIREBASE REALTIME DATABASE RULES
+         * ------------------------------------------------------------
+         *  วางไว้ใน Firebase Console → Realtime Database → Rules
+         *  กติกานี้: ต้องล็อกอิน (anonymous ก็ได้) ถึงจะอ่าน/เขียนได้,
+         *  และแก้ได้เฉพาะข้อมูลสมาชิกของตัวเอง / ข้อความที่ตัวเองส่ง
+
+        {
+          "rules": {
+            "rooms": {
+              "$roomCode": {
+                ".read": "auth != null",
+                "meta": {
+                  ".write": "auth != null && (!data.exists() || data.child('hostId').val() === auth.uid)"
+                },
+                "members": {
+                  "$uid": {
+                    ".write": "auth != null && ($uid === auth.uid || root.child('rooms/' + $roomCode + '/meta/hostId').val() === auth.uid)"
+                  }
+                },
+                "messages": {
+                  "$msgId": {
+                    ".write": "auth != null && (!data.exists() || data.child('senderId').val() === auth.uid || root.child('rooms/' + $roomCode + '/meta/hostId').val() === auth.uid)"
+                  }
+                }
+              }
+            }
+          }
+        }
+
+         * ------------------------------------------------------------ */
+    </script>
+</body>
+</html>
